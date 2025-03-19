@@ -28,7 +28,7 @@ def start_queue(prompt_workflow):
 
 # 生成圖片
 def generate_image(prompt_text, step_count):
-    with open("workflow_api.json", "r") as file_json:
+    with open("text2image.json", "r") as file_json:
         prompt = json.load(file_json)
         prompt["6"]["inputs"]["text"] = f"digital artwork of a {prompt_text}"
         prompt["3"]["inputs"]["steps"] = step_count
