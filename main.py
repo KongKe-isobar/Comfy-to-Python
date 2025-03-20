@@ -1,41 +1,38 @@
-import json 
-import urllib.request 
-import base64 
-import io 
-import websocket 
-from PIL import Image 
+import json
+import gradio as gr
+from PIL import Image
+import io
+import base64
+import requests
+import websocket
 
-# Configuration 
-server_address = "kongtest2.ngrok.ibr.tw" 
+URL = 'https://kongtest2.ngrok.ibr.tw/api/prompt'
 
-def load_workflow(filename="image2image.json"): 
-    with open(filename, "r") as file: 
-        return json.load(file) 
-    
-def encode_image_to_base64(image_path): 
-    with open(image_path, "rb") as image_file: 
-        return base64.b64encode(image_file.read()).decode('utf-8') 
-    
-def update_workflow_with_image(workflow, image_path): 
-    base64_image = encode_image_to_base64(image_path) 
-    workflow["15"]["inputs"]["image"] = base64_image 
-    return workflow 
+def compression_image(image):
+    image = Image.fromarray(image)
+    min_side = min(image.size)
+    scale_factor = 512 / min_side
+    new_size = (round(image.size[0] * scale_factor), round(image.size[1] * scale_factor))
+    resized_image = image.resize(new_size)
+    return resized_image
 
-def queue_prompt(prompt): 
-    data = json.dumps({"prompt": prompt}).encode('utf-8') 
-    req = urllib.request.Request(f"http://{server_address}/api/prompt", data=data, headers={'Content-Type': 'application/json'}) 
-    try: 
-        with urllib.request.urlopen(req) as response: 
-            return json.loads(response.read()) 
-    except urllib.error.HTTPError as e: 
-        print(f"HTTP Error {e.code}: {e.reason}") 
-        print(f"Response body: {e.read().decode('utf-8')}") 
-        raise 
-    
+def encode_image_to_base64(image):
+    newImage = compression_image(image)
+    buffered = io.BytesIO()
+    newImage.save(buffered,format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+def start_queue(prompt_workflow):
+    p = {"prompt": prompt_workflow}
+    data = json.dumps(p).encode('utf-8')
+    print("data:" + data.decode('utf-8'))
+    requests.post(URL, data=data)
+
 def get_image(prompt_id): 
     ws = websocket.WebSocket() 
+    
     try:
-        ws.connect(f"ws://{server_address}/ws") 
+        ws.connect(f"ws://{URL}/ws") 
         print(f"Waiting for image data for prompt ID: {prompt_id}") 
 
         while True: 
@@ -54,6 +51,7 @@ def get_image(prompt_id):
                 image = Image.open(io.BytesIO(message[8:])) 
                 ws.close() 
                 return image 
+            
     except websocket.WebSocketException as e:
         print(f"WebSocket error: {e}")
     except json.JSONDecodeError as e:
@@ -61,31 +59,14 @@ def get_image(prompt_id):
     finally:
         ws.close()
     return None
-        
-# Load workflow from JSON file 
-workflow = load_workflow() 
-print("Workflow loaded successfully") 
 
-# Specify the path to the image you want to upload 
-input_image_path = "sample-image.png" 
+def generate_image(input_image):
+    with open("image2image.json","r") as file_json:
+        prompt = json.load(file_json)
+        encoded_image = encode_image_to_base64(input_image)
+        prompt["15"]["inputs"]["image"] = encoded_image
 
-# Update the workflow with the input image 
-workflow = update_workflow_with_image(workflow, input_image_path) 
-print("Workflow updated with input image.") 
+    start_queue(prompt)
 
-#Generate image 
-response = queue_prompt(workflow) 
-prompt_id = response['prompt_id'] 
-print(f"Prompt queued with ID: {prompt_id}") 
-
-image = get_image(prompt_id) 
-if image: 
-    output_filename = "generated_image.png" 
-    image.save(output_filename) 
-    print(f"Image saved as {output_filename}") 
-    print(f"Image size: {image.size}") 
-    print(f"Image mode: {image.mode}") 
-else: 
-    print("Failed to retrieve image") 
-
-print("Script execution completed.")
+demo = gr.Interface(fn=generate_image, inputs=["image"], outputs=["image"])
+demo.launch()

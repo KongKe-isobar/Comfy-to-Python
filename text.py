@@ -28,7 +28,7 @@ def start_queue(prompt_workflow):
 
 # 生成圖片
 def generate_image(prompt_text, step_count):
-    with open("text2image.json", "r") as file_json:
+    with open("text-to-image.json", "r") as file_json:
         prompt = json.load(file_json)
         prompt["6"]["inputs"]["text"] = f"digital artwork of a {prompt_text}"
         prompt["3"]["inputs"]["steps"] = step_count
@@ -58,5 +58,5 @@ def generate_image(prompt_text, step_count):
         # time.sleep(1)  
     
 # 伺服器
-demo = gr.Interface(fn=generate_image, inputs=["text","text"], outputs=["image"])
+demo = gr.Interface(fn=generate_image, inputs=["text","text","image"], outputs=["image"])
 demo.launch()
